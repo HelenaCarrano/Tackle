@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triagem da caixa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #EDF1F4;
+  --sheet: #F8FAFB;
+  --ink: #1C2430;
+  --ink-2: #4A5664;
+  --ink-3: #7B8794;
+  --rule: #CBD4DC;
+  --postal: #1F5FAD;
+  --postal-ink: #FFFFFF;
+  --r-critico: #B3261E;
+  --r-alto: #E0662B;
+  --r-medio: #D9A400;
+  --r-baixo: #7A9CB8;
+  --r-limpo: #C9D3DB;
+  --mitig: #2E7D5B;
+  --focus: #1F5FAD;
+  --sel: #DCE6F0;
+  --font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --font-num: "Barlow Condensed", "Arial Narrow", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121922; --sheet: #18212C; --ink: #E4EAF0; --ink-2: #AFBAC6; --ink-3: #7E8A97; --rule: #2C3846;
+    --postal: #6EA8F0; --postal-ink: #0E1620; --r-critico: #F0594E; --r-alto: #F08A4B; --r-medio: #E8C14A;
+    --r-baixo: #6F8FAA; --r-limpo: #3A4756; --mitig: #5CC395; --focus: #6EA8F0; --sel: #213044; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121922; --sheet: #18212C; --ink: #E4EAF0; --ink-2: #AFBAC6; --ink-3: #7E8A97; --rule: #2C3846;
+  --postal: #6EA8F0; --postal-ink: #0E1620; --r-critico: #F0594E; --r-alto: #F08A4B; --r-medio: #E8C14A;
+  --r-baixo: #6F8FAA; --r-limpo: #3A4756; --mitig: #5CC395; --focus: #6EA8F0; --sel: #213044; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.5 var(--font-body); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+/* ---------- topo ---------- */
+.top { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; padding: 18px 24px 10px; }
+.top h1 { font-family: var(--font-num); font-weight: 700; font-size: 34px; line-height: 1; margin: 0; letter-spacing: .2px; }
+.top .count { color: var(--ink-2); }
+.top .spacer { flex: 1; }
+.sources { display: flex; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }
+.sources span { padding: 1px 8px; border: 1px solid var(--rule); border-radius: 20px; }
+.sources span.on { border-color: var(--postal); color: var(--ink); }
+.sources span.on::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--postal); margin-right: 6px; vertical-align: 1px; }
+a.btn { text-decoration: none; display: inline-block; }
+.btn { border: 1px solid var(--rule); background: var(--sheet); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--postal); color: var(--postal-ink); border-color: var(--postal); }
+.btn.danger { border-color: var(--r-critico); color: var(--r-critico); }
+.btn.good { border-color: var(--mitig); color: var(--mitig); }
+.btn[aria-pressed="true"].danger { background: var(--r-critico); color: #fff; }
+.btn[aria-pressed="true"].good { background: var(--mitig); color: #fff; }
+
+/* ---------- faixa da caixa ---------- */
+.strip-wrap { padding: 4px 24px 14px; }
+.strip-head { display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.strip-head p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.legend { display: flex; gap: 4px; flex-wrap: wrap; }
+.legend button { display: flex; align-items: baseline; gap: 6px; background: none; border: 1px solid transparent; border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.legend button[aria-pressed="true"] { border-color: var(--ink); background: var(--sheet); }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.legend b { font-family: var(--font-num); font-size: 20px; font-weight: 600; }
+.legend small { color: var(--ink-2); font-size: 13px; }
+#strip { width: 100%; height: 132px; display: block; cursor: crosshair; }
+.strip-axis { display: flex; justify-content: space-between; color: var(--ink-3); font-size: 12px; margin-top: 2px; }
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--paper); padding: 6px 10px; border-radius: 6px; font-size: 13px; z-index: 20; display: none; max-width: 280px; }
+
+/* ---------- área principal ---------- */
+.main { display: grid; grid-template-columns: minmax(340px, 42%) 1fr; border-top: 1px solid var(--rule); min-height: calc(100vh - 230px); }
+.listpane { border-right: 1px solid var(--rule); display: flex; flex-direction: column; min-width: 0; }
+.tabs { display: flex; gap: 2px; padding: 10px 16px 0; }
+.tabs button { background: none; border: none; border-bottom: 2px solid transparent; padding: 6px 10px; cursor: pointer; color: var(--ink-2); }
+.tabs button[aria-selected="true"] { border-color: var(--ink); color: var(--ink); font-weight: 700; }
+.filters { display: flex; gap: 8px; padding: 10px 16px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--rule); }
+.filters input[type=search] { flex: 1 1 200px; min-width: 0; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); }
+.filters select { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); }
+.active-filter { font-size: 13px; color: var(--ink-2); padding: 0 16px 6px; display: none; }
+.active-filter button { background: none; border: none; color: var(--postal); cursor: pointer; padding: 0; text-decoration: underline; }
+#list { overflow-y: auto; flex: 1; }
+.row { display: grid; grid-template-columns: 62px 1fr; gap: 10px; padding: 10px 16px 10px 0; border-bottom: 1px solid var(--rule); cursor: pointer; position: relative; background: none; width: 100%; text-align: left; border-left: 0; border-right: 0; border-top: 0; }
+.row:hover { background: var(--sheet); }
+.row[aria-current="true"] { background: var(--sel); }
+.row .score { font-family: var(--font-num); font-weight: 700; font-size: 28px; line-height: 1; text-align: right; padding-top: 2px; border-left: 5px solid var(--lvl); padding-right: 4px; }
+.row .subj { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .from { color: var(--ink-2); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .why { font-size: 13px; color: var(--ink-2); margin-top: 3px; display: flex; gap: 4px 10px; flex-wrap: wrap; }
+.row .why span::before { content: "•"; color: var(--lvl); margin-right: 4px; }
+.row .tags { position: absolute; right: 12px; top: 10px; display: flex; gap: 4px; font-size: 12px; }
+.tag { border: 1px solid var(--rule); border-radius: 4px; padding: 0 5px; color: var(--ink-2); background: var(--paper); }
+.tag.lab-phishing { border-color: var(--r-critico); color: var(--r-critico); }
+.tag.lab-legitimo { border-color: var(--mitig); color: var(--mitig); }
+.empty { padding: 32px 16px; color: var(--ink-2); }
+
+/* ---------- detalhe ---------- */
+#detail { overflow-y: auto; padding: 22px 28px 60px; min-width: 0; }
+.d-head { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
+.stamp { width: 104px; height: 104px; border-radius: 50%; border: 3px solid var(--lvl); display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--lvl); transform: rotate(-8deg); position: relative; }
+.stamp::after { content: ""; position: absolute; inset: 5px; border: 1px dashed var(--lvl); border-radius: 50%; opacity: .6; }
+.stamp b { font-family: var(--font-num); font-size: 44px; line-height: .9; font-weight: 700; }
+.stamp span { font-family: var(--font-num); font-size: 16px; font-weight: 600; letter-spacing: .5px; }
+.d-head h2 { font-family: var(--font-num); font-size: 30px; font-weight: 600; line-height: 1.1; margin: 4px 0 6px; overflow-wrap: anywhere; }
+.d-meta { color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
+.d-meta b { color: var(--ink); font-weight: 400; }
+.verdict { margin: 18px 0 0; padding: 12px 14px; border-left: 4px solid var(--lvl); background: var(--sheet); max-width: 72ch; }
+.verdict small { display: block; color: var(--ink-3); font-size: 12.5px; margin-top: 4px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+section.blk { margin-top: 28px; max-width: 900px; }
+section.blk h3 { font-family: var(--font-num); font-weight: 600; font-size: 22px; margin: 0 0 8px; }
+section.blk h3 small { font-family: var(--font-body); font-size: 13px; font-weight: 400; color: var(--ink-2); margin-left: 8px; }
+.cat { margin-bottom: 12px; }
+.cat-name { font-size: 13px; color: var(--ink-3); margin-bottom: 2px; }
+.f { display: grid; grid-template-columns: 110px 34px 1fr; gap: 10px; padding: 5px 0; border-top: 1px solid var(--rule); }
+.f .p { font-family: var(--font-num); font-size: 17px; font-weight: 600; color: var(--ink-2); text-align: right; line-height: 1.3; }
+.f .p.neg { color: var(--mitig); }
+.f:first-of-type { border-top: 0; }
+.bar { height: 10px; margin-top: 6px; background: var(--paper); border-radius: 2px; position: relative; }
+.bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink-2); border-radius: 2px; }
+.bar i.neg { background: var(--mitig); }
+.bar i.crit { background: var(--r-critico); }
+.f .t { font-weight: 700; }
+.f .d { font-size: 13.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th { text-align: left; font-weight: 700; color: var(--ink-2); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--rule); }
+td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; overflow-wrap: anywhere; }
+td.url { font-size: 12.5px; color: var(--ink-2); max-width: 340px; }
+td .pts { font-family: var(--font-num); font-size: 17px; font-weight: 600; }
+.flags { margin: 0; padding-left: 16px; }
+.pills { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { border: 1px solid var(--rule); border-radius: 20px; padding: 2px 10px; font-size: 14px; }
+.pill.pass { border-color: var(--mitig); color: var(--mitig); }
+.pill.fail { border-color: var(--r-critico); color: var(--r-critico); }
+.body-text { white-space: pre-wrap; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 14px; max-height: 360px; overflow: auto; font-size: 14px; max-width: 80ch; overflow-wrap: anywhere; }
+.hidden-text { border-left: 4px solid var(--r-alto); padding: 8px 12px; background: var(--sheet); font-size: 13.5px; overflow-wrap: anywhere; margin-bottom: 10px; }
+.jev { display: grid; grid-template-columns: minmax(150px, 260px) 1fr 48px; gap: 4px 10px; align-items: center; font-size: 14px; max-width: 620px; }
+.jev .bar { margin-top: 0; }
+.jev .bar i { background: var(--r-alto); }
+.kv { display: grid; grid-template-columns: 130px 1fr; gap: 2px 12px; font-size: 13.5px; }
+.kv dt { color: var(--ink-3); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.placeholder { color: var(--ink-2); max-width: 52ch; padding-top: 40px; }
+.placeholder h2 { font-family: var(--font-num); font-size: 30px; font-weight: 600; color: var(--ink); margin: 0 0 6px; }
+.back { display: none; }
+
+/* ---------- campanhas e domínios ---------- */
+#overview { overflow-y: auto; flex: 1; padding: 6px 16px 30px; }
+#overview h3 { font-family: var(--font-num); font-size: 21px; font-weight: 600; margin: 18px 0 6px; }
+#overview p.note { margin: 0 0 8px; color: var(--ink-2); font-size: 13.5px; }
+.ov-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--rule); cursor: pointer; background: none; border-left: 0; border-right: 0; border-top: 0; width: 100%; text-align: left; }
+.ov-row:hover { background: var(--sheet); }
+.ov-row b { overflow-wrap: anywhere; }
+.ov-row small { display: block; color: var(--ink-2); }
+.ov-row .n { font-family: var(--font-num); font-size: 22px; font-weight: 600; }
+.sig { display: grid; grid-template-columns: 1fr 120px 40px; gap: 10px; align-items: center; font-size: 14px; padding: 3px 0; }
+
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 8px 16px; border-radius: 6px; display: none; z-index: 30; }
+
+@media (max-width: 860px) {
+  .top, .strip-wrap { padding-left: 16px; padding-right: 16px; }
+  .main { grid-template-columns: 1fr; }
+  .listpane { border-right: 0; }
+  #detail { display: none; padding: 16px; }
+  body.show-detail #detail { display: block; }
+  body.show-detail .listpane, body.show-detail .strip-wrap { display: none; }
+  .back { display: inline-block; margin-bottom: 12px; }
+  .stamp { width: 84px; height: 84px; }
+  .stamp b { font-size: 34px; }
+  .d-head h2 { font-size: 24px; }
+  .f { grid-template-columns: 56px 30px 1fr; }
+  .jev { grid-template-columns: 1fr 80px 40px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stamp { animation: stampin .28s ease-out; }
+  @keyframes stampin { from { transform: rotate(-8deg) scale(1.25); opacity: 0; } to { transform: rotate(-8deg) scale(1); opacity: 1; } }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Triagem da caixa</h1>
+  <span class="count" id="count">carregando…</span>
+  <span class="spacer"></span>
+  <div class="sources" id="sources" aria-label="Fontes de análise ativas"></div>
+  <button class="btn" id="btn-reanalyze" title="Recalcula os scores com as regras e a lista de confiança atuais (sem consultas externas)">Recalcular</button>
+  <a class="btn" id="btn-export" href="/api/export.csv">Exportar CSV</a>
+</header>
+
+<div class="strip-wrap">
+  <div class="strip-head">
+    <div class="legend" id="legend" role="group" aria-label="Filtrar por nível de risco"></div>
+    <p id="strip-caption">Cada traço é um e-mail, na ordem em que chegou. Clique numa coluna para ver só aqueles dias.</p>
+  </div>
+  <canvas id="strip" aria-label="Distribuição dos e-mails no tempo, coloridos pelo risco" role="img"></canvas>
+  <div class="strip-axis"><span id="axis-start"></span><span id="axis-mid"></span><span id="axis-end"></span></div>
+</div>
+
+<div class="main">
+  <div class="listpane">
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" id="tab-list">E-mails</button>
+      <button role="tab" aria-selected="false" id="tab-ov">Campanhas e domínios</button>
+    </div>
+    <div id="pane-list" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="filters">
+        <input type="search" id="q" placeholder="Buscar assunto, remetente ou domínio" aria-label="Buscar">
+        <select id="f-cat" aria-label="Tipo de sinal">
+          <option value="">Qualquer sinal</option>
+          <option value="autenticacao">Autenticação</option>
+          <option value="remetente">Remetente</option>
+          <option value="links">Links</option>
+          <option value="anexos">Anexos</option>
+          <option value="conteudo">Conteúdo</option>
+          <option value="injecao">Texto escondido / injeção</option>
+          <option value="caixa">Comparação com a caixa</option>
+          <option value="reputacao">Reputação externa</option>
+          <option value="ia">IA</option>
+        </select>
+        <select id="f-label" aria-label="Rótulo">
+          <option value="">Com ou sem rótulo</option>
+          <option value="none">Ainda não revisados</option>
+          <option value="phishing">Marcados como phishing</option>
+          <option value="legitimo">Marcados como legítimos</option>
+        </select>
+      </div>
+      <div class="active-filter" id="active-filter"></div>
+      <div id="list" role="list"></div>
+    </div>
+    <div id="overview" style="display:none"></div>
+  </div>
+  <main id="detail" aria-live="polite">
+    <div class="placeholder">
+      <h2>Escolha um e-mail</h2>
+      <p>A lista começa pelos mais arriscados. Abra um para ver cada motivo do score, os links reais por trás do texto e o que a IA achou.</p>
+    </div>
+  </main>
+</div>
+<div class="tip" id="tip"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+"use strict";
+const LEVELS = ["crítico", "alto", "médio", "baixo", "limpo"];
+const LEVEL_VAR = { "crítico": "--r-critico", "alto": "--r-alto", "médio": "--r-medio", "baixo": "--r-baixo", "limpo": "--r-limpo" };
+const CAT_NAMES = { autenticacao: "Autenticação", remetente: "Remetente", links: "Links", anexos: "Anexos", conteudo: "Conteúdo",
+  injecao: "Texto escondido / injeção", caixa: "Comparação com a sua caixa", reputacao: "Reputação externa", ia: "IA" };
+const JEV_NAMES = { asks_credentials: "Pede login ou dados", asks_payment: "Pede pagamento ou troca de conta",
+  impersonation: "Se passa por empresa/autoridade", pressure: "Pressão ou ameaça", lure: "Isca para clicar ou abrir", is_phishing: "Parece golpe" };
+
+// ---------- acesso a dados (API local ou dados embutidos no modo demonstração) ----------
+const DEMO = window.__DEMO__ || null;
+const api = {
+  async meta() { return DEMO ? DEMO.meta : (await fetch("/api/meta")).json(); },
+  async list() { return DEMO ? DEMO.rows : (await fetch("/api/emails")).json(); },
+  async get(id) { return DEMO ? DEMO.details[id] : (await fetch(`/api/emails/${id}`)).json(); },
+  async label(id, label) {
+    if (DEMO) { DEMO.details[id].label = label; return; }
+    await fetch(`/api/emails/${id}/label`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label }) });
+  },
+  async allow(domain) {
+    if (DEMO) return { domain };
+    const r = await fetch("/api/allowlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain }) });
+    return r.json();
+  },
+  async reanalyze() { if (DEMO) return; const r = await fetch("/api/reanalyze", { method: "POST" }); if (!r.ok) throw new Error((await r.json()).detail); },
+};
+
+const $ = (s, el = document) => el.querySelector(s);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const h = (tag, attrs = {}, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "style") el.style.cssText = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false) el.append(kid.nodeType ? kid : String(kid));
+  return el;
+};
+const fmtDate = iso => { if (!iso) return "sem data"; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }); };
+const toast = msg => { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = "none", 2600); };
+
+let rows = [], meta = {}, state = { levels: new Set(), q: "", cat: "", label: "", bin: null, campaign: null, domain: null, current: null };
+
+// ---------- faixa da caixa ----------
+let bins = [], binOf = new Map();
+function buildBins() {
+  const dated = rows.filter(r => r.date && !isNaN(new Date(r.date)));
+  bins = []; binOf = new Map();
+  if (!dated.length) return;
+  const ts = dated.map(r => +new Date(r.date));
+  const min = Math.min(...ts), max = Math.max(...ts);
+  const span = max - min, DAY = 864e5;
+  const size = span <= 3 * DAY ? 36e5 : span <= 200 * DAY ? DAY : 7 * DAY;
+  const start = Math.floor(min / size) * size;
+  const n = Math.max(1, Math.floor((max - start) / size) + 1);
+  for (let i = 0; i < n; i++) bins.push({ t0: start + i * size, t1: start + (i + 1) * size, items: [] });
+  for (const r of dated) { const i = Math.floor((+new Date(r.date) - start) / size); bins[i].items.push(r); binOf.set(r.id, i); }
+  for (const b of bins) b.items.sort((a, b) => a.score - b.score);
+  bins.size = size;
+}
+function drawStrip() {
+  const c = $("#strip"), dpr = window.devicePixelRatio || 1;
+  const W = c.clientWidth, H = c.clientHeight;
+  c.width = W * dpr; c.height = H * dpr;
+  const ctx = c.getContext("2d"); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, W, H);
+  if (!bins.length) return;
+  const maxN = Math.max(...bins.map(b => b.items.length));
+  const colW = W / bins.length, gap = colW > 4 ? 1 : 0;
+  const unit = Math.min(8, (H - 4) / maxN);
+  const visible = new Set(filtered().map(r => r.id));
+  bins.forEach((b, i) => {
+    let y = H;
+    if (state.bin === i) { ctx.fillStyle = css("--sel"); ctx.fillRect(i * colW, 0, colW, H); }
+    for (const r of b.items) {
+      const hgt = Math.max(unit - (unit > 3 ? 1 : 0), 0.6);
+      y -= unit;
+      ctx.globalAlpha = visible.has(r.id) ? 1 : 0.18;
+      ctx.fillStyle = css(LEVEL_VAR[r.level]);
+      ctx.fillRect(i * colW + gap / 2, y, Math.max(colW - gap, 0.8), hgt);
+      if (state.current === r.id) { ctx.globalAlpha = 1; ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2; ctx.strokeRect(i * colW, y - 1, colW, hgt + 2); }
+    }
+  });
+  ctx.globalAlpha = 1;
+  const f = t => new Date(t).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: bins.length > 60 ? "2-digit" : undefined });
+  $("#axis-start").textContent = f(bins[0].t0);
+  $("#axis-mid").textContent = bins.length > 2 ? f(bins[Math.floor(bins.length / 2)].t0) : "";
+  $("#axis-end").textContent = f(bins[bins.length - 1].t0);
+}
+function binAt(ev) { const c = $("#strip"); const x = ev.clientX - c.getBoundingClientRect().left; return Math.min(bins.length - 1, Math.max(0, Math.floor(x / (c.clientWidth / bins.length)))); }
+function wireStrip() {
+  const c = $("#strip"), tip = $("#tip");
+  c.addEventListener("mousemove", ev => {
+    if (!bins.length) return;
+    const b = bins[binAt(ev)];
+    const counts = LEVELS.map(l => [l, b.items.filter(r => r.level === l).length]).filter(x => x[1]);
+    const when = bins.size < 864e5 ? new Date(b.t0).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : new Date(b.t0).toLocaleDateString("pt-BR");
+    tip.textContent = `${when}: ${b.items.length} e-mail(s)` + (counts.length ? " — " + counts.map(([l, n]) => `${n} ${l}`).join(", ") : "");
+    tip.style.display = "block"; tip.style.left = Math.min(ev.clientX + 12, innerWidth - 290) + "px"; tip.style.top = ev.clientY + 14 + "px";
+  });
+  c.addEventListener("mouseleave", () => tip.style.display = "none");
+  c.addEventListener("click", ev => { if (!bins.length) return; const i = binAt(ev); state.bin = state.bin === i ? null : i; render(); });
+  new ResizeObserver(drawStrip).observe(c);
+}
+
+// ---------- filtros e lista ----------
+function filtered() {
+  const q = state.q.toLowerCase();
+  return rows.filter(r =>
+    (!state.levels.size || state.levels.has(r.level)) &&
+    (!q || `${r.subject} ${r.from_name} ${r.from_addr} ${r.risky_domains.join(" ")}`.toLowerCase().includes(q)) &&
+    (!state.cat || r.categories.includes(state.cat)) &&
+    (!state.label || (state.label === "none" ? !r.label : r.label === state.label)) &&
+    (state.bin === null || binOf.get(r.id) === state.bin) &&
+    (!state.campaign || r.campaign === state.campaign) &&
+    (!state.domain || r.from_domain === state.domain || r.risky_domains.includes(state.domain)));
+}
+function renderLegend() {
+  const L = $("#legend"); L.replaceChildren();
+  for (const l of LEVELS) {
+    const n = rows.filter(r => r.level === l).length;
+    L.append(h("button", { "aria-pressed": state.levels.has(l) ? "true" : "false", title: `Mostrar só ${l}`,
+      onclick: () => { state.levels.has(l) ? state.levels.delete(l) : state.levels.add(l); render(); } },
+      h("i", { style: `background:var(${LEVEL_VAR[l]})` }), h("b", {}, n), h("small", {}, l)));
+  }
+}
+function renderActive() {
+  const parts = [];
+  if (state.bin !== null) { const b = bins[state.bin]; parts.push(`período de ${new Date(b.t0).toLocaleDateString("pt-BR")}`); }
+  if (state.campaign) parts.push(`campanha ${state.campaign}`);
+  if (state.domain) parts.push(`domínio ${state.domain}`);
+  const el = $("#active-filter");
+  if (!parts.length) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.replaceChildren("Filtrando por " + parts.join(" e ") + ". ", h("button", { onclick: () => { state.bin = null; state.campaign = null; state.domain = null; render(); } }, "Limpar"));
+}
+function renderList() {
+  const list = $("#list"), items = filtered();
+  list.replaceChildren();
+  if (!items.length) { list.append(h("p", { class: "empty" }, rows.length ? "Nenhum e-mail com esses filtros. Tire um filtro para ver mais." : "Nenhum e-mail importado ainda. Rode 'python -m app.cli imap …' ou 'folder …' e recarregue.")); return; }
+  const frag = document.createDocumentFragment();
+  for (const r of items.slice(0, 600)) {
+    const tags = [];
+    if (r.label) tags.push(h("span", { class: `tag lab-${r.label}` }, r.label === "phishing" ? "phishing" : "legítimo"));
+    if (r.campaign) tags.push(h("span", { class: "tag", title: `Campanha ${r.campaign}` }, "campanha"));
+    if (r.n_attachments) tags.push(h("span", { class: "tag" }, `${r.n_attachments} anexo${r.n_attachments > 1 ? "s" : ""}`));
+    frag.append(h("button", { class: "row", role: "listitem", "aria-current": state.current === r.id ? "true" : "false",
+      style: `--lvl:var(${LEVEL_VAR[r.level]})`, onclick: () => open(r.id) },
+      h("div", { class: "score", title: r.level }, r.score),
+      h("div", {}, h("div", { class: "subj", style: tags.length ? "padding-right:140px" : "" }, r.subject || "(sem assunto)"),
+        h("div", { class: "from" }, (r.from_name ? r.from_name + " " : "") + `<${r.from_addr || "sem remetente"}>`, " · ", fmtDate(r.date)),
+        r.reasons.length ? h("div", { class: "why" }, r.reasons.map(x => h("span", {}, x))) : null),
+      tags.length ? h("div", { class: "tags" }, tags) : null));
+  }
+  list.append(frag);
+  if (items.length > 600) list.append(h("p", { class: "empty" }, `Mostrando os 600 mais arriscados de ${items.length}. Use a busca ou os filtros para chegar nos demais.`));
+}
+
+// ---------- visão de campanhas e domínios ----------
+function renderOverview() {
+  const ov = $("#overview"); ov.replaceChildren();
+  const camp = new Map();
+  for (const r of rows) if (r.campaign) camp.set(r.campaign, [...(camp.get(r.campaign) || []), r]);
+  ov.append(h("h3", {}, "Campanhas"), h("p", { class: "note" }, "Mesmo link suspeito chegando por remetentes diferentes."));
+  if (!camp.size) ov.append(h("p", { class: "note" }, "Nenhuma campanha encontrada."));
+  for (const [d, rs] of [...camp].sort((a, b) => b[1].length - a[1].length)) {
+    const senders = new Set(rs.map(r => r.from_domain)).size;
+    ov.append(h("button", { class: "ov-row", onclick: () => { state.campaign = d; switchTab("list"); render(); } },
+      h("div", {}, h("b", {}, d), h("small", {}, `${senders} remetentes · de ${fmtDate(rs.map(r => r.date).sort()[0])} a ${fmtDate(rs.map(r => r.date).sort().at(-1))}`)),
+      h("span", { class: "n" }, rs.length)));
+  }
+  const doms = new Map();
+  for (const r of rows) for (const d of new Set([...(r.score >= 30 ? [r.from_domain] : []), ...r.risky_domains])) if (d) {
+    const x = doms.get(d) || { n: 0, max: 0 }; x.n++; x.max = Math.max(x.max, r.score); doms.set(d, x);
+  }
+  ov.append(h("h3", {}, "Domínios mais suspeitos"), h("p", { class: "note" }, "Remetentes e destinos de links que aparecem em e-mails com risco. Bons candidatos para bloquear no servidor."));
+  for (const [d, x] of [...doms].sort((a, b) => b[1].max - a[1].max || b[1].n - a[1].n).slice(0, 25)) {
+    ov.append(h("button", { class: "ov-row", onclick: () => { state.domain = d; switchTab("list"); render(); } },
+      h("div", {}, h("b", {}, d), h("small", {}, `score máximo ${x.max}`)), h("span", { class: "n" }, x.n)));
+  }
+  const sig = new Map();
+  for (const r of rows) for (const reason of r.reasons) sig.set(reason, (sig.get(reason) || 0) + 1);
+  ov.append(h("h3", {}, "Sinais mais comuns"), h("p", { class: "note" }, "Contando só os três motivos principais de cada e-mail."));
+  const top = [...sig].sort((a, b) => b[1] - a[1]).slice(0, 14), mx = top[0]?.[1] || 1;
+  for (const [s, n] of top) ov.append(h("div", { class: "sig" }, h("span", {}, s), h("div", { class: "bar" }, h("i", { style: `width:${n / mx * 100}%` })), h("span", { class: "num", style: "font-size:17px" }, n)));
+}
+function switchTab(which) {
+  $("#tab-list").setAttribute("aria-selected", which === "list"); $("#tab-ov").setAttribute("aria-selected", which === "ov");
+  $("#pane-list").style.display = which === "list" ? "flex" : "none"; $("#overview").style.display = which === "ov" ? "block" : "none";
+  if (which === "ov") renderOverview();
+}
+
+// ---------- detalhe ----------
+const modelName = r => { const m = (r && r.modelo) || "Claude"; return /claude/i.test(m) ? "Claude" : m.split("/").pop(); };
+function verdictText(d) {
+  const claude = d.ai?.claude;
+  if (claude?.resumo) return [claude.resumo, claude.acao_recomendada ? `Recomendação: ${claude.acao_recomendada}` : "", `Resumo escrito por ${modelName(claude)} a partir do e-mail e dos sinais técnicos.`];
+  const pos = d.findings.filter(f => f.points > 0);
+  if (!pos.length) return ["Nenhum sinal de risco encontrado.", "", ""];
+  const top = pos.slice(0, 2).map(f => f.title.toLowerCase());
+  const msg = { "crítico": "Muito provavelmente golpe.", "alto": "Provável golpe.", "médio": "Suspeito: vale revisar com calma.", "baixo": "Sinais fracos; provavelmente ok.", "limpo": "Sem sinais relevantes." }[d.level];
+  return [`${msg} Principal motivo: ${top.join(" e ")}.`, "", `${pos.length} sinal(is) somados. Veja o peso de cada um abaixo.`];
+}
+function findingsBlock(d) {
+  const byCat = new Map();
+  for (const f of d.findings) if (f.points !== 0) byCat.set(f.category, [...(byCat.get(f.category) || []), f]);
+  const mx = Math.max(45, ...d.findings.map(f => Math.abs(f.points)));
+  const sec = h("section", { class: "blk" }, h("h3", {}, "Por que esse score", h("small", {}, "barras = peso de cada sinal; verde reduz o score")));
+  const order = Object.keys(CAT_NAMES);
+  for (const [cat, fs] of [...byCat].sort((a, b) => Math.max(...b[1].map(f => f.points)) - Math.max(...a[1].map(f => f.points)) || order.indexOf(a[0]) - order.indexOf(b[0]))) {
+    const box = h("div", { class: "cat" }, h("div", { class: "cat-name" }, CAT_NAMES[cat] || cat));
+    for (const f of fs) box.append(h("div", { class: "f" },
+      h("div", { class: "bar", title: `${f.points} pontos` }, h("i", { class: f.points < 0 ? "neg" : f.critical ? "crit" : "", style: `width:${Math.abs(f.points) / mx * 100}%` })),
+      h("div", { class: `p${f.points < 0 ? " neg" : ""}` }, f.points > 0 ? `+${f.points}` : f.points),
+      h("div", {}, h("div", { class: "t" }, f.title), f.detail ? h("div", { class: "d" }, f.detail) : null)));
+    sec.append(box);
+  }
+  if (!byCat.size) sec.append(h("p", {}, "Nenhum sinal encontrado."));
+  return sec;
+}
+function linksBlock(d) {
+  if (!d.links.length) return null;
+  const sec = h("section", { class: "blk" }, h("h3", {}, "Links", h("small", {}, "endereços reais por trás do texto; não são clicáveis de propósito")));
+  const tb = h("tbody");
+  for (const l of d.links.slice(0, 40)) {
+    const enr = [];
+    if (l.enrichment?.idade_dias !== undefined) enr.push(`domínio com ${l.enrichment.idade_dias} dias`);
+    const vt = l.enrichment?.virustotal; if (vt?.found) enr.push(`VirusTotal: ${vt.malicious} malicioso / ${vt.suspicious} suspeito`);
+    if (l.enrichment?.phishsage) enr.push(`PhishSage: ${l.enrichment.phishsage.join(", ")}`);
+    tb.append(h("tr", {},
+      h("td", {}, h("span", { class: "pts num" }, l.points || "–")),
+      h("td", {}, h("b", {}, l.registered || l.host || "?"), l.text ? h("div", { class: "d", style: "color:var(--ink-3);font-size:12.5px" }, `texto: “${l.text.slice(0, 80)}”`) : null),
+      h("td", { class: "url" }, l.final_url.slice(0, 220)),
+      h("td", {}, (l.flags.length || enr.length) ? h("ul", { class: "flags" }, [...l.flags, ...enr].map(x => h("li", {}, x))) : "–")));
+  }
+  sec.append(h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Peso"), h("th", {}, "Domínio"), h("th", {}, "Endereço completo"), h("th", {}, "Observações"))), tb));
+  if (d.links.length > 40) sec.append(h("p", { class: "d" }, `+ ${d.links.length - 40} links com menos risco.`));
+  return sec;
+}
+function attBlock(d) {
+  if (!d.attachments.length && !d.qr_codes.length) return null;
+  const sec = h("section", { class: "blk" }, h("h3", {}, "Anexos e QR codes"));
+  if (d.attachments.length) {
+    const tb = h("tbody");
+    for (const a of d.attachments) tb.append(h("tr", {}, h("td", {}, a.filename), h("td", {}, a.content_type), h("td", { class: "num" }, `${(a.size / 1024).toFixed(1)} KB`),
+      h("td", { class: "url" }, a.sha256.slice(0, 16) + "…", a.virustotal?.found ? h("div", {}, `VirusTotal: ${a.virustotal.malicious} malicioso`) : null)));
+    sec.append(h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Arquivo"), h("th", {}, "Tipo"), h("th", {}, "Tamanho"), h("th", {}, "SHA-256"))), tb));
+  }
+  for (const q of d.qr_codes) sec.append(h("p", { class: "d" }, `QR code em ${q.source}: `, h("b", {}, q.value)));
+  return sec;
+}
+function aiBlock(d) {
+  const jev = d.ai?.jev, cl = d.ai?.claude;
+  if (!jev && !cl) return null;
+  const sec = h("section", { class: "blk" }, h("h3", {}, "Leitura por IA", h("small", {}, "só pode aumentar o score, nunca diminuir")));
+  if (cl) sec.append(h("p", {}, h("b", {}, `${modelName(cl)}: ${cl.veredito || "?"}`), cl.confianca !== undefined ? ` (confiança ${Math.round(cl.confianca * 100)}%)` : "", cl.resumo ? h("br") : null, cl.resumo || ""));
+  if (jev) {
+    const g = h("div", { class: "jev" });
+    for (const [k, v] of Object.entries(jev)) g.append(h("span", {}, JEV_NAMES[k] || k), h("div", { class: "bar" }, h("i", { style: `width:${v * 100}%` })), h("span", { class: "num", style: "font-size:17px" }, `${Math.round(v * 100)}%`));
+    sec.append(h("p", { class: "d", style: "margin:6px 0" }, "Jev (probabilidade de cada afirmação ser verdadeira):"), g);
+  }
+  return sec;
+}
+function authBlock(d) {
+  const a = d.auth || {};
+  const pill = (k) => { const v = a[k] || "ausente"; return h("span", { class: `pill ${v === "pass" ? "pass" : ["fail", "softfail"].includes(v) ? "fail" : ""}` }, `${k.toUpperCase()} ${v}`); };
+  const sec = h("section", { class: "blk" }, h("h3", {}, "Autenticação e cabeçalhos"), h("div", { class: "pills" }, pill("spf"), pill("dkim"), pill("dmarc")));
+  const dl = h("dl", { class: "kv", style: "margin-top:12px" });
+  const names = { from: "De", "reply-to": "Responder para", "return-path": "Return-Path", to: "Para", date: "Data", "message-id": "Message-ID", "x-mailer": "Programa de envio", "list-unsubscribe": "Descadastro" };
+  for (const [k, v] of Object.entries(d.headers || {})) dl.append(h("dt", {}, names[k] || k), h("dd", {}, v));
+  dl.append(h("dt", {}, "Servidores no caminho"), h("dd", {}, d.received_hops ?? "?"));
+  sec.append(dl);
+  return sec;
+}
+function bodyBlock(d) {
+  const sec = h("section", { class: "blk" }, h("h3", {}, "Conteúdo", h("small", {}, "só o texto; o HTML do e-mail nunca é aberto aqui")));
+  if (d.hidden_text) sec.append(h("div", { class: "hidden-text" }, h("b", {}, "Texto escondido no HTML (o usuário não vê): "), d.hidden_text.slice(0, 600)));
+  sec.append(h("div", { class: "body-text" }, d.text || "(sem texto)"));
+  return sec;
+}
+async function open(id) {
+  state.current = id;
+  document.querySelectorAll(".row").forEach(r => r.setAttribute("aria-current", "false"));
+  renderList(); drawStrip();
+  const d = await api.get(id);
+  const det = $("#detail"); det.replaceChildren(); det.scrollTop = 0;
+  document.body.classList.add("show-detail");
+  det.style.setProperty("--lvl", `var(${LEVEL_VAR[d.level]})`);
+  const [vt, extra, note] = verdictText(d);
+  const row = rows.find(r => r.id === id);
+  const setLabel = async (lab) => {
+    const newLab = d.label === lab ? null : lab;
+    await api.label(id, newLab); d.label = newLab; if (row) row.label = newLab;
+    toast(newLab ? `Marcado como ${newLab === "phishing" ? "phishing" : "legítimo"}` : "Rótulo removido"); open(id);
+  };
+  det.append(
+    h("button", { class: "btn back", onclick: () => document.body.classList.remove("show-detail") }, "Voltar para a lista"),
+    h("div", { class: "d-head" },
+      h("div", { class: "stamp", "aria-label": `score ${d.score}, ${d.level}` }, h("b", {}, d.score), h("span", {}, d.level)),
+      h("div", {}, h("h2", {}, d.subject || "(sem assunto)"),
+        h("div", { class: "d-meta" }, h("b", {}, d.from_name || ""), ` <${d.from_addr || "sem remetente"}>`, h("br"),
+          fmtDate(d.date), d.to?.length ? ` · para ${d.to.slice(0, 3).join(", ")}${d.to.length > 3 ? "…" : ""}` : "",
+          d.reply_to?.length ? h("span", {}, h("br"), `respostas vão para ${d.reply_to.join(", ")}`) : null))),
+    h("div", { class: "verdict" }, vt, extra ? h("div", { style: "margin-top:4px" }, extra) : null, note ? h("small", {}, note) : null),
+    h("div", { class: "actions" },
+      h("button", { class: "btn danger", "aria-pressed": d.label === "phishing" ? "true" : "false", onclick: () => setLabel("phishing") }, "É phishing"),
+      h("button", { class: "btn good", "aria-pressed": d.label === "legitimo" ? "true" : "false", onclick: () => setLabel("legitimo") }, "É legítimo"),
+      d.from_domain ? h("button", { class: "btn", title: "Adiciona à lista de confiança; e-mails autenticados desse domínio passam a pesar menos", onclick: async () => {
+        const r = await api.allow(d.from_domain); toast(`${r.domain} adicionado à lista de confiança. Clique em Recalcular para aplicar.`);
+      } }, `Confiar em ${d.from_domain}`) : null,
+      DEMO ? null : h("a", { class: "btn", href: `/api/emails/${id}/raw` }, "Baixar .eml")),
+    ...[findingsBlock(d), aiBlock(d), linksBlock(d), attBlock(d), authBlock(d), bodyBlock(d)].filter(Boolean));
+}
+
+// ---------- montagem ----------
+function render() { renderLegend(); renderActive(); renderList(); drawStrip(); }
+async function load() {
+  [meta, rows] = await Promise.all([api.meta(), api.list()]);
+  const src = $("#sources"); src.replaceChildren();
+  for (const [k, on] of Object.entries(meta.enrichers || {})) src.append(h("span", { class: on ? "on" : "", title: on ? "ativo" : "desligado" }, k));
+  const reviewed = rows.filter(r => r.label).length;
+  $("#count").textContent = `${rows.length} e-mails` + (reviewed ? ` · ${reviewed} revisados` : "");
+  buildBins(); render();
+}
+$("#q").addEventListener("input", e => { state.q = e.target.value; render(); });
+$("#f-cat").addEventListener("change", e => { state.cat = e.target.value; render(); });
+$("#f-label").addEventListener("change", e => { state.label = e.target.value; render(); });
+$("#tab-list").addEventListener("click", () => switchTab("list"));
+$("#tab-ov").addEventListener("click", () => switchTab("ov"));
+$("#btn-reanalyze").addEventListener("click", async () => {
+  const b = $("#btn-reanalyze"); b.disabled = true; b.textContent = "Recalculando…";
+  try { await api.reanalyze(); await load(); toast("Scores recalculados"); } catch (e) { toast(`Não deu para recalcular: ${e.message}`); }
+  b.disabled = false; b.textContent = "Recalcular";
+});
+if (DEMO) { $("#btn-reanalyze").style.display = "none"; $("#btn-export").style.display = "none"; }
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, select")) return;
+  const items = filtered(); if (!items.length) return;
+  const i = items.findIndex(r => r.id === state.current);
+  if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); open(items[Math.min(items.length - 1, i + 1)].id); }
+  if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); open(items[Math.max(0, i - 1)].id); }
+});
+wireStrip();
+load().catch(err => { $("#list").replaceChildren(h("p", { class: "empty" }, `Não consegui carregar os dados: ${err.message}. O servidor está rodando?`)); });
+})();
+</script>
+</body>
+</html>

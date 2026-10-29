@@ -1,0 +1,48 @@
+# Uso:
+#   docker compose up -d                       → só o painel (heurísticas + APIs que você configurar no .env)
+#   docker compose --profile completo up -d    → painel + eml_analyzer (com SpamAssassin) como segunda opinião
+#
+# Importar e-mails (exemplos):
+#   docker compose run --rm triage python -m app.cli imap --host imap.gmail.com --user voce@gmail.com --folder ALL
+#   docker compose run --rm -v "$PWD/meus_emls:/import" triage python -m app.cli folder /import
+#
+# O painel NÃO tem login: por isso a porta fica presa a 127.0.0.1. Não exponha na internet.
+
+services:
+  triage:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+
+  eml-analyzer:
+    profiles: ["completo"]
+    build:
+      context: https://github.com/ninoseki/eml_analyzer.git
+      dockerfile: app.Dockerfile
+    environment:
+      SPAMASSASSIN_HOST: spamassassin
+      SPAMASSASSIN_PORT: 783
+      REDIS_URL: redis://redis:6379
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      URLSCAN_API_KEY: ${URLSCAN_API_KEY:-}
+    ports:
+      - "127.0.0.1:8000:8000"   # a interface própria do eml_analyzer também fica disponível
+    depends_on: [spamassassin, redis]
+    restart: unless-stopped
+
+  spamassassin:
+    profiles: ["completo"]
+    image: instantlinux/spamassassin:4.0.1-5
+    platform: linux/x86_64
+    restart: unless-stopped
+
+  redis:
+    profiles: ["completo"]
+    image: redis:7-alpine
+    restart: unless-stopped

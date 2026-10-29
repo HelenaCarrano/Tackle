@@ -1,0 +1,3 @@
+# Domínios em que você confia (um por linha). Só reduzem o score quando o e-mail passa na autenticação
+# (DMARC ou SPF+DKIM), então um atacante falsificando esses domínios continua sendo pego.
+# O botão "Confiar em …" do painel adiciona linhas aqui.
