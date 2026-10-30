@@ -36,9 +36,10 @@ docker compose run --rm triage python -m app.cli imap --host imap.gmail.com --us
 |---|---|
 | Gmail (IMAP) | `python -m app.cli imap --host imap.gmail.com --user voce@gmail.com --folder ALL` |
 | Qualquer IMAP | `python -m app.cli imap --host imap.servidor.com --user ... --folder INBOX --since 2026-01-01` |
-| Google Takeout / Thunderbird | `python -m app.cli mbox "Todos os e-mails.mbox"` |
+| Google Takeout (ZIP ou `.mbox`) / Thunderbird | `python -m app.cli mbox "Takeout.zip"` |
 | Pasta de .eml | `python -m app.cli folder ./emails` |
 
+- O ZIP é lido localmente; o comando encontra os arquivos `.mbox` dentro dele sem extrair a estrutura do arquivo para a pasta do projeto. Use `--no-enrich` para não enviar mensagens a serviços externos opcionais durante a análise.
 - **Gmail:** use uma *senha de app* (myaccount.google.com/apppasswords), não a senha normal. Pode deixar em `IMAP_PASSWORD` no `.env`.
 - **Microsoft 365 / Outlook:** a Microsoft desligou login por senha no IMAP. Use `--oauth-token NOME_DA_VARIAVEL` com um token OAuth2, ou exporte a caixa (PST → `readpst -r arquivo.pst` gera mbox) e importe com `mbox`.
 - A leitura é **somente leitura**: nada é apagado, movido ou marcado como lido.
@@ -92,6 +93,10 @@ Como ler isso:
 | Claude (Anthropic ou OpenRouter) | o mesmo que o Jev + os sinais técnicos | score ≥ 15 | escreve a explicação em português que aparece no painel |
 
 **Com chave da OpenRouter:** no `.env`, `LLM_ENABLED=true` e `OPENROUTER_API_KEY=...`. O padrão é `anthropic/claude-haiku-5.5`. Dá para trocar por outro modelo da OpenRouter em `LLM_MODEL`; nesse caso, meça de novo com `evaluate`, porque a qualidade varia muito entre modelos.
+
+Ao fim de `imap`, `folder`, `mbox` e `analyze`, o terminal imprime um **relatório de tempo por e-mail** (importar, caixa, consultas externas, Jev, LLM), os mais lentos primeiro (`--top N`, `--top 0` mostra todos), e os **tokens de entrada/saída** gastos pelo LLM nessa execução. Respostas vindas do cache não gastam tokens e aparecem só como contagem.
+
+O cabeçalho do painel mostra chamadas e tokens de entrada/saída reportados pelo OpenRouter, acumulados localmente desde que esse registro foi adicionado. O provedor não permite reconstruir esse total para chamadas anteriores; sem chamadas OpenRouter registradas, o painel mostra zero.
 
 **Proteções da camada de IA:**
 

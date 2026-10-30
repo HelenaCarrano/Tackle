@@ -14,6 +14,7 @@ import httpx
 from . import db
 from .config import settings
 from .heuristics import Finding
+from .metrics import metrics
 from .parser import ParsedEmail
 
 _vt_calls: list[float] = []
@@ -255,7 +256,7 @@ def _llm_name() -> str:
     return "Claude" if "claude" in settings.llm_model.lower() else settings.llm_model.split("/")[-1]
 
 
-def _call_llm(prompt: str) -> str:
+def _call_llm(prompt: str) -> tuple[str, dict | None]:
     if settings.llm_provider_effective == "openrouter":
         with httpx.Client(timeout=max(60, settings.http_timeout)) as c:
             r = c.post("https://openrouter.ai/api/v1/chat/completions",
@@ -266,12 +267,26 @@ def _call_llm(prompt: str) -> str:
                                           {"role": "user", "content": prompt}]})
         if r.status_code != 200:
             raise RuntimeError(f"OpenRouter HTTP {r.status_code}: {r.text[:120]}")
-        return r.json()["choices"][0]["message"]["content"] or ""
+        response = r.json()
+        raw_usage = response.get("usage") or {}
+        usage = {}
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            value = raw_usage.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                usage[key] = value
+        cost = raw_usage.get("cost")
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool) and cost >= 0:
+            usage["cost"] = cost
+        return response["choices"][0]["message"]["content"] or "", usage
     import anthropic
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     msg = client.messages.create(model=settings.llm_model, max_tokens=400, system=CLAUDE_SYSTEM,
                                  messages=[{"role": "user", "content": prompt}])
-    return "".join(getattr(b, "text", "") for b in msg.content)
+    u = getattr(msg, "usage", None)
+    usage = {}
+    if u is not None:
+        usage = {"prompt_tokens": getattr(u, "input_tokens", 0) or 0, "completion_tokens": getattr(u, "output_tokens", 0) or 0}
+    return "".join(getattr(b, "text", "") for b in msg.content), usage
 
 
 def claude(con, e: ParsedEmail, technical: list[str]) -> tuple[list[Finding], dict]:
@@ -281,11 +296,17 @@ def claude(con, e: ParsedEmail, technical: list[str]) -> tuple[list[Finding], di
     name = _llm_name()
     ck = f"llm:{settings.llm_model}:{e.sha256}"
     res = db.cache_get(con, ck, max_age=90 * 86400)
+    if res is not None:
+        metrics.add_llm_cached()
     if res is None:
         try:
             prompt = (f"Sinais técnicos detectados:\n- " + "\n- ".join(technical[:15] or ["nenhum"]) +
                       f"\n\n<email>\n{safe_text(e)}\n</email>")
-            text = _call_llm(prompt)
+            text, usage = _call_llm(prompt)
+            provider = settings.llm_provider_effective
+            metrics.add_llm(e.sha256, provider, settings.llm_model, usage)
+            if usage and provider == "openrouter":
+                db.record_provider_usage(con, "openrouter", settings.llm_model, usage)
             m = re.search(r"\{.*\}", text, re.S)
             res = json.loads(m.group(0)) if m else {}
             res["modelo"] = settings.llm_model

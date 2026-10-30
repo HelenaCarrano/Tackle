@@ -49,6 +49,16 @@ CREATE TABLE IF NOT EXISTS cache (
     value TEXT,
     created_at REAL
 );
+CREATE TABLE IF NOT EXISTS provider_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    total_tokens INTEGER,
+    cost REAL,
+    recorded_at REAL NOT NULL
+);
 """
 
 JSON_COLS = {"reply_to", "to_addrs", "auth", "local_findings", "mailbox_findings", "enrich_findings", "ai",
@@ -107,3 +117,17 @@ def cache_get(con: sqlite3.Connection, key: str, max_age: float = 7 * 86400):
 def cache_set(con: sqlite3.Connection, key: str, value) -> None:
     con.execute("INSERT OR REPLACE INTO cache(key, value, created_at) VALUES (?,?,?)", (key, dumps(value), time.time()))
     con.commit()
+
+
+def record_provider_usage(con: sqlite3.Connection, provider: str, model: str, usage: dict) -> None:
+    prompt = usage.get("prompt_tokens")
+    completion = usage.get("completion_tokens")
+    total = usage.get("total_tokens")
+    if total is None and prompt is not None and completion is not None:
+        total = prompt + completion
+    con.execute(
+        """INSERT INTO provider_usage
+           (provider, model, prompt_tokens, completion_tokens, total_tokens, cost, recorded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (provider, model, prompt, completion, total, usage.get("cost"), time.time()),
+    )

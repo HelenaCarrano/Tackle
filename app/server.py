@@ -74,8 +74,17 @@ def index():
 def meta():
     with db.session() as con:
         n = con.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
+        usage = con.execute(
+            """SELECT COUNT(*) AS requests,
+                      COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+                      COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+                      COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                      SUM(cost) AS cost
+               FROM provider_usage WHERE provider='openrouter'"""
+        ).fetchone()
     return {
         "total": n,
+        "openrouter_usage": dict(usage),
         "enrichers": {
             "VirusTotal": bool(settings.virustotal_api_key),
             "Idade de domínio": settings.domain_age_enabled,

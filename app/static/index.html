@@ -51,6 +51,7 @@ button, input, select { font: inherit; color: inherit; }
 .top { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; padding: 18px 24px 10px; }
 .top h1 { font-family: var(--font-num); font-weight: 700; font-size: 34px; line-height: 1; margin: 0; letter-spacing: .2px; }
 .top .count { color: var(--ink-2); }
+.token-usage { color: var(--ink-2); font-size: 12px; }
 .top .spacer { flex: 1; }
 .sources { display: flex; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }
 .sources span { padding: 1px 8px; border: 1px solid var(--rule); border-radius: 20px; }
@@ -219,6 +220,7 @@ body { min-height: 100vh; background: radial-gradient(ellipse at 50% -35%, #1425
 .brand-copy { display: grid; gap: 4px; }
 .top h1 { font: 700 24px/1.15 var(--font-body); letter-spacing: 0; }
 .top .count { font-size: 13px; }
+.token-usage { flex: 1 1 100%; margin-left: 55px; }
 .top .spacer { flex: 1 1 20px; }
 .sources { gap: 6px; justify-content: flex-end; font-size: 11px; }
 .sources span { padding: 4px 9px; border-color: var(--rule); border-radius: 999px; }
@@ -258,6 +260,7 @@ body { min-height: 100vh; background: radial-gradient(ellipse at 50% -35%, #1425
 }
 .listpane, #detail { height: 100%; min-height: 0; border: 1px solid var(--rule); border-radius: 11px; background: rgba(12, 24, 39, .76); box-shadow: 0 12px 35px #03091430; overflow: hidden; }
 .listpane { border-right: 1px solid var(--rule); }
+#detail { overflow-y: auto; }
 .tabs { padding: 12px 14px 0; border-bottom: 1px solid var(--rule); }
 .tabs button { padding: 7px 10px 10px; font-size: 13px; }
 .tabs button[aria-selected="true"] { border-color: #8eb3ff; color: #c4d6ff; }
@@ -348,6 +351,7 @@ section.blk h3 small { font-size: 11px; }
     <div class="brand-copy">
       <h1>Triagem de e-mails</h1>
       <span class="count" id="count">carregando…</span>
+      <span class="token-usage" id="token-usage" title="Soma do uso reportado pelo OpenRouter desde que este registro foi ativado">OpenRouter: tokens não medidos</span>
     </div>
   </div>
   <span class="spacer"></span>
@@ -749,6 +753,8 @@ async function load() {
   for (const [k, on] of Object.entries(meta.enrichers || {})) src.append(h("span", { class: on ? "on" : "", title: on ? "ativo" : "desligado" }, k));
   const reviewed = rows.filter(r => r.label).length;
   $("#count").textContent = `${rows.length} mensagens analisadas` + (reviewed ? ` · ${reviewed} revisadas` : "");
+  const usage = meta.openrouter_usage || {};
+  $("#token-usage").textContent = `OpenRouter: ${(usage.total_tokens || 0).toLocaleString("pt-BR")} tokens · ${(usage.requests || 0).toLocaleString("pt-BR")} chamadas`;
   buildBins(); render();
   if (rows.length && !state.current) await open(rows[0].id);
 }

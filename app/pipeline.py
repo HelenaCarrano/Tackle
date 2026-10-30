@@ -8,6 +8,7 @@ from . import db, enrich
 from . import urls as U
 from .config import settings
 from .heuristics import Finding, analyze_local
+from .metrics import metrics
 from .mailbox import MailboxContext
 from .parser import parse_eml
 from .scoring import compute
@@ -17,6 +18,7 @@ EXTERNAL_LINK_LIMIT = 3
 
 def ingest_bytes(con, raw: bytes, folder: str = "", log=print) -> bool:
     """Guarda e analisa localmente um e-mail. Retorna False se já existia."""
+    t0 = time.perf_counter()
     try:
         e = parse_eml(raw)
     except Exception as exc:  # noqa: BLE001
@@ -43,6 +45,8 @@ def ingest_bytes(con, raw: bytes, folder: str = "", log=print) -> bool:
          db.dumps([f.to_dict() for f in local.findings]), db.dumps([vars(l) for l in local.links]),
          db.dumps(local.attachments), db.dumps(local.qr_codes), time.time()),
     )
+    metrics.timings[e.sha256]["importar"] += time.perf_counter() - t0
+    metrics.subjects[e.sha256] = db.clean(e.subject)
     return True
 
 
@@ -57,11 +61,14 @@ def enrich_one(con, row: dict, base_findings: list[dict], allow: set[str], full:
     e = parse_eml(raw)
     out: list[Finding] = []
     links = row["links"]
+    sha = row["sha256"]
     if full:
-        _external(con, row, raw, links, allow, out)
+        with metrics.stage(sha, "externo", row["subject"]):
+            _external(con, row, raw, links, allow, out)
 
     ai: dict = {}
-    jf, jans = enrich.jev(con, e)
+    with metrics.stage(sha, "jev", row["subject"]):
+        jf, jans = enrich.jev(con, e)
     out += jf
     if jans:
         ai["jev"] = jans
@@ -69,7 +76,8 @@ def enrich_one(con, row: dict, base_findings: list[dict], allow: set[str], full:
     prelim = base_findings + [f.to_dict() for f in out]
     score, _ = compute(prelim)
     if score >= settings.llm_min_score:
-        cf, cres = enrich.claude(con, e, _technical_summary(prelim))
+        with metrics.stage(sha, "llm", row["subject"]):
+            cf, cres = enrich.claude(con, e, _technical_summary(prelim))
         out += cf
         if cres:
             ai["claude"] = cres
@@ -132,11 +140,12 @@ def analyze_all(con, *, do_enrich: bool = True, force: bool = False, log=print) 
     ctx = MailboxContext(rows, allow)
     stats = {"total": len(rows), "enriquecidos": 0}
     for i, r in enumerate(rows, 1):
-        mb, campaign = ctx.findings_for(r)
-        mbd = [f.to_dict() for f in mb]
-        base = r["local_findings"] + mbd
-        enrich_findings, ai, links = r["enrich_findings"], r["ai"], r["links"]
-        pre_score, _ = compute(base)
+        with metrics.stage(r["sha256"], "caixa", r["subject"]):
+            mb, campaign = ctx.findings_for(r)
+            mbd = [f.to_dict() for f in mb]
+            base = r["local_findings"] + mbd
+            enrich_findings, ai, links = r["enrich_findings"], r["ai"], r["links"]
+            pre_score, _ = compute(base)
         full = do_enrich and pre_score >= settings.enrich_min_score and (force or not r["enriched"])
         ai_only = do_enrich and not full and (force or not r["enriched"]) and (
             settings.jev_enabled or (settings.llm_ready and pre_score >= settings.llm_min_score))

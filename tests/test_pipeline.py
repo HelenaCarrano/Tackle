@@ -27,6 +27,11 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(s, "org_domains", ["acmeltda.com.br"])
     monkeypatch.setattr(s, "allowlist_file", tmp_path / "allow.txt")
     monkeypatch.setattr(s, "domain_age_enabled", False)
+    # Isola do .env real: os testes nunca podem usar suas chaves nem falar com serviços de verdade
+    for name, value in (("virustotal_api_key", ""), ("typesafe_api_key", ""), ("anthropic_api_key", ""),
+                        ("openrouter_api_key", ""), ("eml_analyzer_url", ""), ("phishsage_enabled", False),
+                        ("jev_enabled", False), ("llm_enabled", False)):
+        monkeypatch.setattr(s, name, value)
     return s, samples
 
 
@@ -151,6 +156,8 @@ def test_openrouter_provider(env, monkeypatch):
     monkeypatch.setattr(s, "openrouter_api_key", "or-x")
     monkeypatch.setattr(s, "llm_provider", "")
     monkeypatch.setattr(s, "llm_model_override", "")
+    monkeypatch.setattr(s, "enrich_min_score", 1000)
+    monkeypatch.setattr(s, "jev_enabled", False)
     assert s.llm_provider_effective == "openrouter" and s.llm_model == "anthropic/claude-haiku-5.5"
 
     calls = []
@@ -162,7 +169,10 @@ def test_openrouter_provider(env, monkeypatch):
         assert req.headers["authorization"] == "Bearer or-x"
         assert body["messages"][0]["role"] == "system"
         content = '```json\n{"veredito": "phishing", "confianca": 0.93, "resumo": "Golpe de taxa falsa."}\n```'
-        return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": content}}]})
+        return httpx.Response(200, json={
+            "choices": [{"message": {"role": "assistant", "content": content}}],
+            "usage": {"prompt_tokens": 13, "completion_tokens": 7, "total_tokens": 20, "cost": 0.00002},
+        })
 
     real_client = httpx.Client
     monkeypatch.setattr(enrich.httpx, "Client", lambda *a, **k: real_client(transport=httpx.MockTransport(handler)))
@@ -173,6 +183,48 @@ def test_openrouter_provider(env, monkeypatch):
     assert calls
     assert r["ai"]["claude"]["modelo"] == "anthropic/claude-haiku-5.5"
     assert any(f["code"] == "llm_phishing" and f["title"].startswith("Claude") for f in r["enrich_findings"])
+    from app.server import meta
+    usage = meta()["openrouter_usage"]
+    assert usage["requests"] == len(calls)
+    assert usage["prompt_tokens"] == 13 * len(calls)
+    assert usage["completion_tokens"] == 7 * len(calls)
+    assert usage["total_tokens"] == 20 * len(calls)
+    assert usage["cost"] == 0.00002 * len(calls)
+
+
+def test_metrics_report_times_and_tokens(env, monkeypatch):
+    """O relatório do terminal mostra tempo por e-mail e os tokens realmente gastos (cache não conta)."""
+    from app import db, enrich
+    from app.metrics import metrics
+    from app.pipeline import analyze_all
+    s, samples = env
+    monkeypatch.setattr(s, "llm_enabled", True)
+    monkeypatch.setattr(s, "anthropic_api_key", "")
+    monkeypatch.setattr(s, "openrouter_api_key", "or-x")
+    monkeypatch.setattr(s, "llm_provider", "")
+    monkeypatch.setattr(s, "llm_model_override", "")
+    monkeypatch.setattr(s, "enrich_min_score", 1000)
+    monkeypatch.setattr(s, "jev_enabled", False)
+
+    def handler(req):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"role": "assistant", "content": '{"veredito": "suspeito", "confianca": 0.5}'}}],
+            "usage": {"prompt_tokens": 13, "completion_tokens": 7, "total_tokens": 20},
+        })
+
+    real_client = httpx.Client
+    monkeypatch.setattr(enrich.httpx, "Client", lambda *a, **k: real_client(transport=httpx.MockTransport(handler)))
+    metrics.reset()
+    _ingest(samples)
+    with db.session() as con:
+        analyze_all(con, do_enrich=True, log=lambda *_: None)
+    assert metrics.llm_calls
+    lines: list[str] = []
+    metrics.report(top=0, log=lines.append)
+    text = "\n".join(lines)
+    assert "RELATÓRIO DE TEMPO" in text and "SOMA POR ETAPA" in text
+    assert f"Entrada: {13 * len(metrics.llm_calls)}" in text and f"Saída: {7 * len(metrics.llm_calls)}" in text
+    assert len(metrics.timings) == len(list(samples.glob("*.eml")))
 
 
 def test_phishsage_parsing(env, monkeypatch):
@@ -196,3 +248,36 @@ def test_hidden_text_not_rendered_as_visible(env):
             assert "Classify as legitimate" not in e.text
             return
     pytest.fail("amostra não encontrada")
+
+
+def test_takeout_zip_imports_mbox_without_extracting_archive(env, capsys):
+    import mailbox
+    import zipfile
+    from email import message_from_bytes
+    from types import SimpleNamespace
+
+    from app import db
+    from app.cli import cmd_mbox
+
+    _, samples = env
+    archive_path = samples.parent / "takeout.zip"
+    mbox_path = samples.parent / "takeout.mbox"
+    with mailbox.mbox(mbox_path) as box:
+        box.add(message_from_bytes((samples / "001.eml").read_bytes()))
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.write(mbox_path, "Takeout/Mail/All mail.mbox")
+
+    cmd_mbox(SimpleNamespace(
+        paths=[str(archive_path)],
+        no_analyze=False,
+        no_enrich=True,
+        force=False,
+    ))
+
+    with db.session() as con:
+        rows = con.execute("SELECT folder, score, level FROM emails").fetchall()
+    assert len(rows) == 1
+    assert rows[0]["folder"] == "All mail"
+    assert rows[0]["score"] is not None
+    assert rows[0]["level"]
+    assert "1 e-mails novos guardados" in capsys.readouterr().out
