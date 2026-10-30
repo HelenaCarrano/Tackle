@@ -261,7 +261,7 @@ def _call_llm(prompt: str) -> tuple[str, dict | None]:
         with httpx.Client(timeout=max(60, settings.http_timeout)) as c:
             r = c.post("https://openrouter.ai/api/v1/chat/completions",
                        headers={"Authorization": f"Bearer {settings.openrouter_api_key}",
-                                "X-Title": "phish-triage"},
+                                "X-Title": "Tackle"},
                        json={"model": settings.llm_model, "max_tokens": 400, "temperature": 0,
                              "messages": [{"role": "system", "content": CLAUDE_SYSTEM},
                                           {"role": "user", "content": prompt}]})

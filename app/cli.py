@@ -95,7 +95,7 @@ def _mailbox_messages(path: Path):
         if not members:
             raise SystemExit(f"Nenhum arquivo .mbox encontrado em {path}.")
 
-        with tempfile.TemporaryDirectory(prefix="phish-triage-") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="tackle-") as temp_dir:
             for index, info in enumerate(members):
                 extracted = Path(temp_dir) / f"{index}.mbox"
                 with archive.open(info) as source, extracted.open("wb") as target:
@@ -194,7 +194,7 @@ def cmd_reset(args) -> None:
 
 
 def main(argv=None) -> None:
-    p = argparse.ArgumentParser(prog="phish-triage", description="Triagem de phishing para caixas de e-mail inteiras")
+    p = argparse.ArgumentParser(prog="tackle", description="Triagem de phishing para caixas de e-mail inteiras")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("imap", help="Ler direto do servidor IMAP (somente leitura)")

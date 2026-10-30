@@ -1,4 +1,6 @@
-# phish-triage
+# Tackle
+
+> Phishing triage for entire mailboxes: a 0–100 risk score with the reason behind every point, a local dashboard, and optional AI. Your emails stay on your machine.
 
 Lê uma caixa de e-mail inteira, dá a cada mensagem um score de risco de 0 a 100 com o motivo de cada ponto, e mostra tudo num painel web.
 

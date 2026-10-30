@@ -23,7 +23,7 @@ def main() -> None:
     ap.add_argument("out")
     ap.add_argument("--min-score", type=int, default=0, help="Só incluir e-mails a partir deste score")
     ap.add_argument("--no-body", action="store_true", help="Não incluir o texto dos e-mails")
-    ap.add_argument("--title", default="Triagem da caixa")
+    ap.add_argument("--title", default="Tackle")
     ap.add_argument("--banner", default="", help="Aviso exibido no topo (ex.: 'Dados de exemplo')")
     ap.add_argument("--fragment", action="store_true", help="Sem <!doctype>/<html>/<head>/<body> (para embutir em outra página)")
     args = ap.parse_args()
@@ -42,7 +42,7 @@ def main() -> None:
     data = data.replace("</", "<\\/")  # impede fechar a tag <script> por conteúdo de e-mail
 
     html = (STATIC / "index.html").read_text(encoding="utf-8")
-    html = html.replace("<title>Triagem da caixa</title>", f"<title>{args.title}</title>")
+    html = html.replace("<title>Tackle</title>", f"<title>{args.title}</title>")
     html = html.replace("<script>\n(() => {", f"<script>window.__DEMO__ = {data};</script>\n<script>\n(() => {{", 1)
     if args.banner:
         banner = ('<p style="margin:0 24px 6px;padding:6px 12px;border-left:4px solid var(--postal);background:var(--sheet);'

@@ -17,7 +17,7 @@ from .parser import parse_eml
 from .pipeline import analyze_all
 
 STATIC = Path(__file__).parent / "static"
-app = FastAPI(title="phish-triage")
+app = FastAPI(title="Tackle")
 _lock = threading.Lock()
 
 
